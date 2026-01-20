@@ -1,0 +1,279 @@
+Simulate any 3 topologies (of which one must be hybrid topology) with 
+N nodes for 100secs. The nodes are numbered sequentially started from 1. 
+In all the topologies, the odd numbered stations are sources and even 
+numbered nodes are destinations. Assume that all source nodes transmit the 
+fixed size data packets from the starting of the simulation till the end of the simulation.  
+Measure the throughput and packet loss by varying number of nodes (N :5,10,15,20,25).
+
+Plot  (i) Graph 1:  Throughput (in Y-axis)  Vs No. of nodes (5,10,15,20, 25) in X-axis
+        (ii) Graph2: Packet Loss in Y-axis Vs No. of nodes (5,10,15,20, 25) in X-axis
+
+
+
+
+answer
+import matplotlib.pyplot as plt
+
+SIMULATION_TIME = 100
+PACKET_SIZE = 100
+SEND_RATE = 10
+LINK_CAPACITY = 50000
+
+node_counts = [5, 10, 15, 20, 25]
+topologies = ["Bus", "Star", "Hybrid"]
+
+throughput = {t: [] for t in topologies}
+packet_loss = {t: [] for t in topologies}
+
+for N in node_counts:
+    sources = (N + 1) // 2
+    total_packets = sources * SEND_RATE * SIMULATION_TIME
+    offered_load = sources * SEND_RATE * PACKET_SIZE
+
+    for t in topologies:
+        if t == "Bus":
+            efficiency = max(0.3, 1 - 0.03 * N)
+        elif t == "Star":
+            efficiency = max(0.5, 1 - 0.02 * N)
+        else:
+            efficiency = max(0.4, 1 - 0.025 * N)
+
+        successful_bits = min(offered_load, LINK_CAPACITY) * efficiency
+        throughput[t].append(successful_bits / 1000)
+
+        successful_packets = (successful_bits / PACKET_SIZE) * SIMULATION_TIME
+        loss = total_packets - successful_packets
+        packet_loss[t].append(max(loss, 0))
+
+plt.figure()
+for t in topologies:
+    plt.plot(node_counts, throughput[t], marker='o', label=t)
+plt.xlabel("Number of Nodes")
+plt.ylabel("Throughput (kbps)")
+plt.title("Throughput vs Number of Nodes")
+plt.legend()
+plt.grid()
+plt.show()
+
+plt.figure()
+for t in topologies:
+    plt.plot(node_counts, packet_loss[t], marker='o', label=t)
+plt.xlabel("Number of Nodes")
+plt.ylabel("Packet Loss")
+plt.title("Packet Loss vs Number of Nodes")
+plt.legend()
+plt.grid()
+plt.show()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+tcp vs udp
+
+server
+
+// Server program 
+#include <arpa/inet.h> 
+#include <errno.h> 
+#include <netinet/in.h> 
+#include <signal.h> 
+#include <stdio.h> 
+#include <stdlib.h> 
+#include <strings.h> 
+#include <sys/socket.h> 
+#include <sys/types.h> 
+#include <unistd.h> 
+#define PORT 5000 
+#define MAXLINE 1024 
+int max(int x, int y) 
+{ 
+    if (x > y) 
+        return x; 
+    else
+        return y; 
+} 
+int main() 
+{ 
+    int listenfd, connfd, udpfd, nready, maxfdp1; 
+    char buffer[MAXLINE]; 
+    pid_t childpid; 
+    fd_set rset; 
+    ssize_t n; 
+    socklen_t len; 
+    const int on = 1; 
+    struct sockaddr_in cliaddr, servaddr; 
+    char* message = "Hello Client"; 
+    void sig_chld(int); 
+
+    /* create listening TCP socket */
+    listenfd = socket(AF_INET, SOCK_STREAM, 0); 
+    bzero(&servaddr, sizeof(servaddr)); 
+    servaddr.sin_family = AF_INET; 
+    servaddr.sin_addr.s_addr = htonl(INADDR_ANY); 
+    servaddr.sin_port = htons(PORT); 
+
+    // binding server addr structure to listenfd 
+    bind(listenfd, (struct sockaddr*)&servaddr, sizeof(servaddr)); 
+    listen(listenfd, 10); 
+
+    /* create UDP socket */
+    udpfd = socket(AF_INET, SOCK_DGRAM, 0); 
+    // binding server addr structure to udp sockfd 
+    bind(udpfd, (struct sockaddr*)&servaddr, sizeof(servaddr)); 
+
+    // clear the descriptor set 
+    FD_ZERO(&rset); 
+
+    // get maxfd 
+    maxfdp1 = max(listenfd, udpfd) + 1; 
+    for (;;) { 
+
+        // set listenfd and udpfd in readset 
+        FD_SET(listenfd, &rset); 
+        FD_SET(udpfd, &rset); 
+
+        // select the ready descriptor 
+        nready = select(maxfdp1, &rset, NULL, NULL, NULL); 
+
+        // if tcp socket is readable then handle 
+        // it by accepting the connection 
+        if (FD_ISSET(listenfd, &rset)) { 
+            len = sizeof(cliaddr); 
+            connfd = accept(listenfd, (struct sockaddr*)&cliaddr, &len); 
+            if ((childpid = fork()) == 0) { 
+                close(listenfd); 
+                bzero(buffer, sizeof(buffer)); 
+                printf("Message From TCP client: "); 
+                read(connfd, buffer, sizeof(buffer)); 
+                puts(buffer); 
+                write(connfd, (const char*)message, sizeof(buffer)); 
+                close(connfd); 
+                exit(0); 
+            } 
+            close(connfd); 
+        } 
+        // if udp socket is readable receive the message. 
+        if (FD_ISSET(udpfd, &rset)) { 
+            len = sizeof(cliaddr); 
+            bzero(buffer, sizeof(buffer)); 
+            printf("\nMessage from UDP client: "); 
+            n = recvfrom(udpfd, buffer, sizeof(buffer), 0, 
+                        (struct sockaddr*)&cliaddr, &len); 
+            puts(buffer); 
+            sendto(udpfd, (const char*)message, sizeof(buffer), 0, 
+                (struct sockaddr*)&cliaddr, sizeof(cliaddr)); 
+        } 
+    } 
+}
+
+
+
+
+
+tcp 
+
+
+// TCP Client program 
+#include <netinet/in.h> 
+#include <stdio.h> 
+#include <stdlib.h> 
+#include <string.h> 
+#include <sys/socket.h> 
+#include <sys/types.h> 
+#define PORT 5000 
+#define MAXLINE 1024 
+int main() 
+{ 
+    int sockfd; 
+    char buffer[MAXLINE]; 
+    char* message = "Hello Server"; 
+    struct sockaddr_in servaddr; 
+
+    int n, len; 
+    // Creating socket file descriptor 
+    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) { 
+        printf("socket creation failed"); 
+        exit(0); 
+    } 
+
+    memset(&servaddr, 0, sizeof(servaddr)); 
+
+    // Filling server information 
+    servaddr.sin_family = AF_INET; 
+    servaddr.sin_port = htons(PORT); 
+    servaddr.sin_addr.s_addr = inet_addr("127.0.0.1"); 
+
+    if (connect(sockfd, (struct sockaddr*)&servaddr, 
+                            sizeof(servaddr)) < 0) { 
+        printf("\n Error : Connect Failed \n"); 
+    } 
+
+    memset(buffer, 0, sizeof(buffer)); 
+    strcpy(buffer, "Hello Server"); 
+    write(sockfd, buffer, sizeof(buffer)); 
+    printf("Message from server: "); 
+    read(sockfd, buffer, sizeof(buffer)); 
+    puts(buffer); 
+    close(sockfd); 
+}
+
+
+
+
+
+udp
+
+// UDP client program 
+#include <arpa/inet.h> 
+#include <netinet/in.h> 
+#include <stdio.h> 
+#include <stdlib.h> 
+#include <strings.h> 
+#include <sys/socket.h> 
+#include <sys/types.h> 
+#define PORT 5000 
+#define MAXLINE 1024 
+int main() 
+{ 
+    int sockfd; 
+    char buffer[MAXLINE]; 
+    char* message = "Hello Server"; 
+    struct sockaddr_in servaddr; 
+
+    int n, len; 
+    // Creating socket file descriptor 
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) { 
+        printf("socket creation failed"); 
+        exit(0); 
+    } 
+
+    memset(&servaddr, 0, sizeof(servaddr)); 
+
+    // Filling server information 
+    servaddr.sin_family = AF_INET; 
+    servaddr.sin_port = htons(PORT); 
+    servaddr.sin_addr.s_addr = inet_addr("127.0.0.1"); 
+    // send hello message to server 
+    sendto(sockfd, (const char*)message, strlen(message), 
+        0, (const struct sockaddr*)&servaddr, 
+        sizeof(servaddr)); 
+
+    // receive server's response 
+    printf("Message from server: "); 
+    n = recvfrom(sockfd, (char*)buffer, MAXLINE, 
+                0, (struct sockaddr*)&servaddr, 
+                &len); 
+    puts(buffer); 
+    close(sockfd); 
+    return 0; 
+}
